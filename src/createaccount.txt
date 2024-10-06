@@ -10,8 +10,6 @@ const CreateAccount = () => {
     skills: '',
     experience: '',
     goals: '',
-    latitude: null,
-    longitude: null,
   });
   const [error, setError] = useState(null);
   const navigate = useNavigate();
@@ -21,39 +19,16 @@ const CreateAccount = () => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const getLocation = () => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          setFormData(prev => ({
-            ...prev,
-            latitude: position.coords.latitude,
-            longitude: position.coords.longitude
-          }));
-        },
-        (error) => {
-          console.error("Error getting location:", error);
-          setError("Failed to get location. Please enable location services.");
-        }
-      );
-    } else {
-      setError("Geolocation is not supported by this browser.");
-    }
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
     try {
-      if (!formData.latitude || !formData.longitude) {
-        throw new Error("Location is required. Please allow location access.");
-      }
-
       // Sign up the user
       const { data, error: signUpError } = await supabase.auth.signUp({
         email: formData.email,
         password: formData.password,
       });
+
       if (signUpError) throw signUpError;
 
       // Create the founder profile
@@ -64,10 +39,9 @@ const CreateAccount = () => {
           skills: formData.skills,
           experience: formData.experience,
           goals: formData.goals,
-          latitude: formData.latitude,
-          longitude: formData.longitude,
         },
       ]);
+
       if (profileError) throw profileError;
 
       navigate('/dashboard');
@@ -78,10 +52,10 @@ const CreateAccount = () => {
   };
 
   return (
-    <div className="max-w-md mx-auto mt-10 p-6 bg-white rounded-lg shadow-xl">
-      <h2 className="text-2xl font-bold mb-6 text-center">Create Account</h2>
-      <form onSubmit={handleSubmit} className="space-y-4">
-        {error && <p className="text-red-500 text-sm">{error}</p>}
+    <div>
+      <h2>Create Account</h2>
+      <form onSubmit={handleSubmit}>
+        {error && <p style={{color: 'red'}}>{error}</p>}
         <input
           type="text"
           name="name"
@@ -89,7 +63,6 @@ const CreateAccount = () => {
           onChange={handleChange}
           placeholder="Name"
           required
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
         <input
           type="email"
@@ -98,7 +71,6 @@ const CreateAccount = () => {
           onChange={handleChange}
           placeholder="Email"
           required
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
         <input
           type="password"
@@ -107,7 +79,6 @@ const CreateAccount = () => {
           onChange={handleChange}
           placeholder="Password"
           required
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
         <input
           type="text"
@@ -116,7 +87,6 @@ const CreateAccount = () => {
           onChange={handleChange}
           placeholder="Skills (comma-separated)"
           required
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
         <textarea
           name="experience"
@@ -124,7 +94,6 @@ const CreateAccount = () => {
           onChange={handleChange}
           placeholder="Experience"
           required
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
         ></textarea>
         <textarea
           name="goals"
@@ -132,21 +101,8 @@ const CreateAccount = () => {
           onChange={handleChange}
           placeholder="Goals"
           required
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
         ></textarea>
-        <button
-          type="button"
-          onClick={getLocation}
-          className="w-full bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
-        >
-          Get My Location
-        </button>
-        <button
-          type="submit"
-          className="w-full bg-green-500 text-white py-2 px-4 rounded-md hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-opacity-50"
-        >
-          Create Account
-        </button>
+        <button type="submit">Create Account</button>
       </form>
     </div>
   );

@@ -9,7 +9,6 @@ const Chat = () => {
   const [error, setError] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [senderFounder, setSenderFounder] = useState(null);
-  const [receiverFounder, setReceiverFounder] = useState(null);
   const supabase = useSupabase();
   const messagesEndRef = useRef(null);
 
@@ -52,26 +51,8 @@ const Chat = () => {
       }
     };
 
-    const fetchReceiverFounder = async () => {
-      if (founderId) {
-        const { data, error } = await supabase
-          .from('founders')
-          .select('*')
-          .eq('id', founderId)
-          .single();
-        
-        if (error) {
-          console.error('Error fetching receiver founder:', error);
-          setError('Failed to load receiver information');
-        } else {
-          setReceiverFounder(data);
-        }
-      }
-    };
-
     fetchSenderFounder();
-    fetchReceiverFounder();
-  }, [supabase, founderId]);
+  }, [supabase]);
 
   useEffect(() => {
     if (senderFounder) {
@@ -93,7 +74,7 @@ const Chat = () => {
   }, [supabase]);
 
   const sendMessage = async (e) => {
-    e.preventDefault();
+    e.preventDefault(); // Prevent form submission
     if (!newMessage.trim() || !senderFounder) return;
     setError(null);
     try {
@@ -106,7 +87,9 @@ const Chat = () => {
       ]);
 
       if (error) throw error;
-      setNewMessage('');
+      setNewMessage(''); // Clear input field after sending
+      // Optionally, you can update the messages state here if the real-time subscription is slow
+      // setMessages((prevMessages) => [...prevMessages, data[0]]);
     } catch (error) {
       console.error('Error sending message:', error);
       setError('Failed to send message: ' + error.message);
@@ -122,26 +105,18 @@ const Chat = () => {
 
   return (
     <div style={{ maxWidth: '600px', margin: '0 auto', padding: '20px' }}>
-      <h1>Chat with {receiverFounder?.name || 'User'}</h1>
+      <h1>Chat</h1>
       <div style={{ height: '400px', overflowY: 'scroll', border: '1px solid #ccc', padding: '10px', marginBottom: '20px' }}>
         {messages.map((message) => (
-          <div key={message.id} style={{ 
-            margin: '10px 0', 
+          <p key={message.id} style={{ 
+            margin: '5px 0', 
             textAlign: message.sender_id === founderId ? 'left' : 'right',
+            backgroundColor: message.sender_id === founderId ? '#f0f0f0' : '#e6f3ff',
+            padding: '5px 10px',
+            borderRadius: '10px'
           }}>
-            <p style={{
-              backgroundColor: message.sender_id === founderId ? '#f0f0f0' : '#e6f3ff',
-              padding: '5px 10px',
-              borderRadius: '10px',
-              display: 'inline-block',
-              maxWidth: '70%',
-            }}>
-              {message.content}
-            </p>
-            <div style={{ fontSize: '0.8em', color: '#888' }}>
-              {message.sender_id === senderFounder?.id ? 'You' : receiverFounder?.name}
-            </div>
-          </div>
+            {message.content}
+          </p>
         ))}
         <div ref={messagesEndRef} />
       </div>
