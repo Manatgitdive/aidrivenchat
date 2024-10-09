@@ -63,10 +63,12 @@ const Dashboard = () => {
   const handleSend = async (e) => {
     e.preventDefault();
     if (!input.trim()) return;
+
     const userMessage = { text: input, sender: 'user' };
     setMessages(prev => [...prev, userMessage]);
     setInput('');
     setIsAiThinking(true);
+
     try {
       const context = {
         currentFounder,
@@ -113,7 +115,6 @@ const Dashboard = () => {
 
   return (
     <div className="bg-white text-gray-800 min-h-screen flex flex-col">
-      {/* Navigation */}
       <nav className="bg-white border-b p-4">
         <div className="max-w-5xl mx-auto flex justify-between items-center">
           <div className="flex items-center">
@@ -124,7 +125,6 @@ const Dashboard = () => {
         </div>
       </nav>
 
-      {/* Main content */}
       <main className="flex-grow flex flex-col max-w-3xl mx-auto w-full p-4 sm:p-6 md:p-8">
         {messages.length === 1 ? (
           <>

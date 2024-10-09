@@ -47,3 +47,63 @@ const FounderProfile = () => {
 };
 
 export default FounderProfile;
+
+
+
+
+
+// update new one //  
+
+import React, { useState, useEffect } from 'react';
+import { useParams, Link } from 'react-router-dom';
+import { useSupabase } from '../contexts/SupabaseContext';
+
+const FounderProfile = () => {
+  const { founderId } = useParams();
+  const [founder, setFounder] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const supabase = useSupabase();
+
+  useEffect(() => {
+    const fetchFounder = async () => {
+      try {
+        setIsLoading(true);
+        const { data, error } = await supabase
+          .from('founders')
+          .select('*')
+          .eq('id', founderId)
+          .single();
+
+        if (error) throw error;
+        setFounder(data);
+      } catch (error) {
+        console.error('Error fetching founder:', error);
+        setError('Failed to load founder profile');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchFounder();
+  }, [founderId, supabase]);
+
+  if (isLoading) return <div>Loading...</div>;
+  if (error) return <div>Error: {error}</div>;
+  if (!founder) return <div>Founder not found</div>;
+
+  return (
+    <div style={{ maxWidth: '600px', margin: '0 auto', padding: '20px' }}>
+      <h1>{founder.name}'s Profile</h1>
+      <div style={{ border: '1px solid #ddd', borderRadius: '8px', padding: '20px', marginBottom: '20px' }}>
+        <p><strong>Skills:</strong> {founder.skills}</p>
+        <p><strong>Experience:</strong> {founder.experience}</p>
+        <p><strong>Goals:</strong> {founder.goals}</p>
+      </div>
+      <Link to={`/chat/${founder.id}`} style={{ textDecoration: 'none', color: '#ffffff', backgroundColor: '#28a745', padding: '10px 20px', borderRadius: '5px' }}>Chat with {founder.name}</Link>
+      <Link to="/dashboard" style={{ textDecoration: 'none', color: '#007bff', marginLeft: '20px' }}>Back to Dashboard</Link>
+    </div>
+  );
+};
+
+export default FounderProfile;

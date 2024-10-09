@@ -63,10 +63,12 @@ const Dashboard = () => {
   const handleSend = async (e) => {
     e.preventDefault();
     if (!input.trim()) return;
+
     const userMessage = { text: input, sender: 'user' };
     setMessages(prev => [...prev, userMessage]);
     setInput('');
     setIsAiThinking(true);
+
     try {
       const context = {
         currentFounder,
@@ -77,7 +79,7 @@ const Dashboard = () => {
       
       setMessages(prev => [...prev, { text: aiResponse.message, sender: 'ai' }]);
       
-      if (aiResponse.founders && aiResponse.founders.length > 0) {
+      if (aiResponse.founders) {
         setDisplayFounders(aiResponse.founders);
       } else {
         setDisplayFounders([]);
@@ -105,15 +107,14 @@ const Dashboard = () => {
   if (error) return <div className="flex justify-center items-center h-screen bg-white text-red-500">Error: {error}</div>;
 
   const suggestions = [
-    "Recommend founders for networking",
+    "Find nearby founders for networking",
     "Give me tips for pitching to investors",
     "Ideas to improve my startup's growth",
-    "Show me all founders in my area"
+    "Help me find the latest startup trends"
   ];
 
   return (
     <div className="bg-white text-gray-800 min-h-screen flex flex-col">
-      {/* Navigation */}
       <nav className="bg-white border-b p-4">
         <div className="max-w-5xl mx-auto flex justify-between items-center">
           <div className="flex items-center">
@@ -124,7 +125,6 @@ const Dashboard = () => {
         </div>
       </nav>
 
-      {/* Main content */}
       <main className="flex-grow flex flex-col max-w-3xl mx-auto w-full p-4 sm:p-6 md:p-8">
         {messages.length === 1 ? (
           <>
@@ -206,7 +206,7 @@ const Dashboard = () => {
                   <h3 className="font-bold text-lg">{founder.name}</h3>
                   <p className="text-sm mb-2">{founder.skills}</p>
                   {founder.distance && <p className="text-sm mb-2">Distance: {founder.distance.toFixed(2)} km</p>}
-                  {founder.matchReason && <p className="text-sm mb-2">{founder.matchReason}</p>}
+                  {founder.matchPercentage && <p className="text-sm mb-2">Match: {founder.matchPercentage}%</p>}
                   <div className="flex justify-between mt-4">
                     <Link to={`/profile/${founder.id}`} className="text-blue-600 hover:text-blue-800 font-semibold">
                       View Profile
@@ -226,3 +226,128 @@ const Dashboard = () => {
 };
 
 export default Dashboard;
+
+
+
+
+
+
+
+// update gemini api ai //
+
+
+
+
+
+
+
+import { GoogleGenerativeAI } from "@google/generative-ai";
+
+const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY);
+
+export async function getGeminiResponse(prompt, context) {
+  const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+
+  const isFounderQuery = prompt.toLowerCase().includes('founder') || 
+                         prompt.toLowerCase().includes('recommend') ||
+                         prompt.toLowerCase().includes('suggest');
+
+  const systemPrompt = `
+You are an AI assistant for FounderAI, a founder networking platform. Your role is to provide valuable insights, connections, and advice to startup founders. Use the following context to inform your responses:
+
+Current user: ${JSON.stringify(context.currentFounder)}
+All founders: ${JSON.stringify(context.allFounders)}
+Conversation history: ${JSON.stringify(context.previousMessages)}
+
+Guidelines:
+1. Respond to any question or topic the user might ask about, not limited to startup-related queries.
+2. If asked about nearby founders, calculate distances and return founders within 50km.
+3. For founder recommendations, analyze skills and goals to find the best matches.
+4. Provide concise, actionable advice when asked about startups, networking, or funding.
+5. For general knowledge questions, provide accurate and helpful information.
+6. Always format your response as a JSON object with 'message' and 'founders' fields.
+7. If the query is about founders or recommendations, always include relevant founder information in your response.
+
+Example response format:
+{
+  "message": "Your detailed response here...",
+  "founders": [
+    {
+      "id": "123",
+      "name": "Jane Doe",
+      "skills": "AI, Blockchain",
+      "matchReason": "Jane's expertise in AI aligns well with your interest in machine learning applications for fintech."
+    }
+  ]
+}
+`;
+
+  try {
+    const result = await model.generateContent(systemPrompt + "\n\nUser query: " + prompt);
+    const response = await result.response;
+    let parsedResponse;
+
+    try {
+      parsedResponse = JSON.parse(response.text());
+    } catch (parseError) {
+      // If parsing fails, wrap the response in a valid JSON structure
+      parsedResponse = {
+        message: response.text(),
+        founders: []
+      };
+    }
+    
+    // Ensure founder information is included for founder-related queries
+    if (isFounderQuery && (!parsedResponse.founders || parsedResponse.founders.length === 0)) {
+      parsedResponse.founders = getRelevantFounders(context.allFounders, context.currentFounder, prompt);
+    }
+    
+    // Process founder information
+    if (parsedResponse.founders && Array.isArray(parsedResponse.founders)) {
+      parsedResponse.founders = parsedResponse.founders.map(founder => ({
+        ...founder,
+        distance: calculateDistance(
+          context.currentFounder.latitude,
+          context.currentFounder.longitude,
+          founder.latitude,
+          founder.longitude
+        )
+      })).sort((a, b) => a.distance - b.distance);
+    }
+    
+    return parsedResponse;
+  } catch (error) {
+    console.error("Error calling Gemini API:", error);
+    return {
+      message: "I'm sorry, I encountered an error while processing your request. Please try again.",
+      founders: isFounderQuery ? getRelevantFounders(context.allFounders, context.currentFounder, prompt) : []
+    };
+  }
+}
+
+function getRelevantFounders(allFounders, currentFounder, query) {
+  // Simple recommendation logic - can be expanded for more sophisticated matching
+  return allFounders
+    .filter(founder => founder.id !== currentFounder.id)
+    .map(founder => ({
+      ...founder,
+      matchReason: `${founder.name} might be a good connection based on their skills in ${founder.skills}.`
+    }))
+    .slice(0, 5); // Return top 5 founders
+}
+
+function calculateDistance(lat1, lon1, lat2, lon2) {
+  const R = 6371; // Radius of the earth in km
+  const dLat = deg2rad(lat2 - lat1);
+  const dLon = deg2rad(lon2 - lon1);
+  const a =
+    Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) *
+    Math.sin(dLon/2) * Math.sin(dLon/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return R * c; // Distance in km
+}
+
+function deg2rad(deg) {
+  return deg * (Math.PI/180);
+}
