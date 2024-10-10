@@ -5,6 +5,7 @@ import Dashboard from './components/Dashboard';
 import Chat from './components/Chat';
 import Login from './components/Login';
 import CreateAccount from './components/CreateAccount';
+import FounderProfile from './components/FounderProfile'; // Add this import
 import './index.css';
 
 const PrivateRoute = ({ children }) => {
@@ -35,6 +36,7 @@ const App = () => {
           <Route path="/create-account" element={<CreateAccount />} />
           <Route path="/dashboard" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
           <Route path="/chat/:founderId" element={<PrivateRoute><Chat /></PrivateRoute>} />
+          <Route path="/profile/:founderId" element={<PrivateRoute><FounderProfile /></PrivateRoute>} /> {/* Add this route */}
           <Route path="/" element={<Navigate replace to="/login" />} />
         </Routes>
       </Router>
