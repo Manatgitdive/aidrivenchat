@@ -59,3 +59,165 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
 function deg2rad(deg) {
   return deg * (Math.PI/180);
 }
+
+
+
+
+
+
+
+
+
+import { GoogleGenerativeAI } from "@google/generative-ai";
+
+const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY);
+
+export async function getGeminiResponse(prompt, context) {
+  const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+
+  const isFounderQuery = prompt.toLowerCase().includes('founder') || 
+                         prompt.toLowerCase().includes('recommend') ||
+                         prompt.toLowerCase().includes('suggest') ||
+                         prompt.toLowerCase().includes('co-founder') ||
+                         prompt.toLowerCase().includes('looking for');
+
+  const systemPrompt = `
+You are an AI assistant for FounderAI, a sophisticated founder networking platform. Your role is to provide highly accurate and valuable insights, connections, and advice to startup founders. Use the following context to inform your responses:
+
+Current user: ${JSON.stringify(context.currentFounder)}
+All founders: ${JSON.stringify(context.allFounders)}
+Conversation history: ${JSON.stringify(context.previousMessages)}
+
+Guidelines:
+1. Respond to any question or topic the user might ask about, with a focus on startup-related queries.
+2. For founder or co-founder recommendations, perform a detailed analysis of skills, experience, goals, and compatibility to find the best matches.
+3. If specific skills or requirements are mentioned, prioritize those in your recommendations.
+4. Provide concise, actionable advice when asked about startups, networking, or funding.
+5. For general knowledge questions, provide accurate and helpful information.
+6. Always format your response as a JSON object with 'message' and 'founders' fields.
+7. In the 'founders' field, include relevant founder information when appropriate, otherwise leave it as an empty array.
+8. When listing founders, include all available information: id, name, skills, experience, goals, and add a 'matchReason' field explaining why they're a good match.
+
+Example response format:
+{
+  "message": "Based on your request for a co-founder with full-stack development skills, I've identified these highly relevant matches:",
+  "founders": [
+    {
+      "id": "123",
+      "name": "Jane Doe",
+      "skills": "Full-stack development, React, Node.js, AWS",
+      "experience": "5 years in tech startups",
+      "goals": "Building scalable SaaS solutions",
+      "matchReason": "Jane's extensive full-stack development experience and startup background make her an excellent potential co-founder for your tech venture."
+    }
+  ]
+}
+`;
+
+  try {
+    const result = await model.generateContent(systemPrompt + "\n\nUser query: " + prompt);
+    const response = await result.response;
+    let parsedResponse;
+
+    try {
+      parsedResponse = JSON.parse(response.text());
+    } catch (parseError) {
+      console.error("Error parsing Gemini response:", parseError);
+      parsedResponse = {
+        message: response.text(),
+        founders: []
+      };
+    }
+    
+    if (isFounderQuery && (!parsedResponse.founders || parsedResponse.founders.length === 0)) {
+      parsedResponse.founders = getRelevantFounders(context.allFounders, context.currentFounder, prompt);
+    }
+    
+    if (parsedResponse.founders && Array.isArray(parsedResponse.founders)) {
+      parsedResponse.founders = parsedResponse.founders.map(founder => ({
+        ...founder,
+        distance: calculateDistance(
+          context.currentFounder.latitude,
+          context.currentFounder.longitude,
+          founder.latitude,
+          founder.longitude
+        )
+      })).sort((a, b) => (b.matchScore || 0) - (a.matchScore || 0));
+    }
+    
+    return parsedResponse;
+  } catch (error) {
+    console.error("Error calling Gemini API:", error);
+    return {
+      message: "I apologize, but I encountered an error while processing your request. Please try again.",
+      founders: isFounderQuery ? getRelevantFounders(context.allFounders, context.currentFounder, prompt) : []
+    };
+  }
+}
+
+function getRelevantFounders(allFounders, currentFounder, query) {
+  const requiredSkills = extractSkills(query);
+  
+  return allFounders
+    .filter(founder => founder.id !== currentFounder.id)
+    .map(founder => ({
+      ...founder,
+      matchScore: calculateMatchScore(currentFounder, founder, requiredSkills),
+      matchReason: generateMatchReason(founder, requiredSkills)
+    }))
+    .sort((a, b) => b.matchScore - a.matchScore)
+    .slice(0, 5);
+}
+
+function extractSkills(query) {
+  const skillKeywords = ['full-stack', 'backend', 'frontend', 'AI', 'machine learning', 'blockchain', 'mobile', 'iOS', 'Android', 'UI/UX', 'devops', 'cloud', 'database', 'security', 'data science', 'AR/VR', 'IoT'];
+  return skillKeywords.filter(skill => query.toLowerCase().includes(skill.toLowerCase()));
+}
+
+function calculateMatchScore(currentFounder, potentialMatch, requiredSkills) {
+  let score = 0;
+  const currentSkills = new Set(currentFounder.skills.toLowerCase().split(',').map(s => s.trim()));
+  const matchSkills = new Set(potentialMatch.skills.toLowerCase().split(',').map(s => s.trim()));
+  
+  requiredSkills.forEach(skill => {
+    if (matchSkills.has(skill.toLowerCase())) score += 10;
+  });
+  
+  score += [...matchSkills].filter(skill => !currentSkills.has(skill)).length * 2;
+  
+  score += Math.min(potentialMatch.years_of_experience || 0, 10);
+  
+  if (currentFounder.industry === potentialMatch.industry) score += 5;
+  
+  return score;
+}
+
+function generateMatchReason(founder, requiredSkills) {
+  const matchedSkills = requiredSkills.filter(skill => 
+    founder.skills.toLowerCase().includes(skill.toLowerCase())
+  );
+  
+  if (matchedSkills.length > 0) {
+    return `${founder.name} is a strong match with expertise in ${matchedSkills.join(', ')}, which aligns perfectly with your requirements. They also bring ${founder.years_of_experience || 'significant'} years of experience in the ${founder.industry || 'tech'} industry.`;
+  } else {
+    return `While ${founder.name} doesn't exactly match your specific requirements, their skills in ${founder.skills} and ${founder.years_of_experience || 'their'} years of experience in ${founder.industry || 'their industry'} could bring valuable diversity to your team.`;
+  }
+}
+
+function calculateDistance(lat1, lon1, lat2, lon2) {
+  if (!lat1 || !lon1 || !lat2 || !lon2) return null;
+  
+  const R = 6371; // Radius of the earth in km
+  const dLat = deg2rad(lat2 - lat1);
+  const dLon = deg2rad(lon2 - lon1);
+  const a =
+    Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) *
+    Math.sin(dLon/2) * Math.sin(dLon/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return R * c; // Distance in km
+}
+
+function deg2rad(deg) {
+  return deg * (Math.PI/180);
+}

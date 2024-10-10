@@ -5,6 +5,7 @@ import Dashboard from './components/Dashboard';
 import Chat from './components/Chat';
 import Login from './components/Login';
 import CreateAccount from './components/CreateAccount';
+import './index.css';
 
 const PrivateRoute = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);

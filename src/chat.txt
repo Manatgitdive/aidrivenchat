@@ -1,0 +1,338 @@
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useParams } from 'react-router-dom';
+import { useSupabase } from '../contexts/SupabaseContext';
+
+const Chat = () => {
+  const { founderId } = useParams();
+  const [messages, setMessages] = useState([]);
+  const [newMessage, setNewMessage] = useState('');
+  const [error, setError] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [senderFounder, setSenderFounder] = useState(null);
+  const [receiverFounder, setReceiverFounder] = useState(null);
+  const supabase = useSupabase();
+  const messagesEndRef = useRef(null);
+
+  const fetchMessages = useCallback(async () => {
+    if (!senderFounder || !founderId) return;
+    setIsLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('messages')
+        .select('*')
+        .or(`and(sender_id.eq.${senderFounder.id},receiver_id.eq.${founderId}),and(sender_id.eq.${founderId},receiver_id.eq.${senderFounder.id})`)
+        .order('created_at', { ascending: true });
+
+      if (error) throw error;
+      setMessages(data);
+    } catch (error) {
+      console.error('Error fetching messages:', error);
+      setError('Failed to fetch messages: ' + error.message);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [supabase, founderId, senderFounder]);
+
+  useEffect(() => {
+    const fetchSenderFounder = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data, error } = await supabase
+          .from('founders')
+          .select('*')
+          .eq('user_id', user.id)
+          .single();
+        
+        if (error) {
+          console.error('Error fetching sender founder:', error);
+          setError('Failed to load chat');
+        } else {
+          setSenderFounder(data);
+        }
+      }
+    };
+
+    const fetchReceiverFounder = async () => {
+      if (founderId) {
+        const { data, error } = await supabase
+          .from('founders')
+          .select('*')
+          .eq('id', founderId)
+          .single();
+        
+        if (error) {
+          console.error('Error fetching receiver founder:', error);
+          setError('Failed to load receiver information');
+        } else {
+          setReceiverFounder(data);
+        }
+      }
+    };
+
+    fetchSenderFounder();
+    fetchReceiverFounder();
+  }, [supabase, founderId]);
+
+  useEffect(() => {
+    if (senderFounder) {
+      fetchMessages();
+    }
+  }, [senderFounder, fetchMessages]);
+
+  useEffect(() => {
+    const channel = supabase
+      .channel('custom-all-channel')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
+        setMessages((prevMessages) => [...prevMessages, payload.new]);
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [supabase]);
+
+  const sendMessage = async (e) => {
+    e.preventDefault();
+    if (!newMessage.trim() || !senderFounder) return;
+    setError(null);
+    try {
+      const { data, error } = await supabase.from('messages').insert([
+        {
+          sender_id: senderFounder.id,
+          receiver_id: founderId,
+          content: newMessage.trim(),
+        },
+      ]);
+
+      if (error) throw error;
+      setNewMessage('');
+    } catch (error) {
+      console.error('Error sending message:', error);
+      setError('Failed to send message: ' + error.message);
+    }
+  };
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  if (isLoading) return <div>Loading...</div>;
+  if (error) return <div>Error: {error}</div>;
+
+  return (
+    <div style={{ maxWidth: '600px', margin: '0 auto', padding: '20px' }}>
+      <h1>Chat with {receiverFounder?.name || 'User'}</h1>
+      <div style={{ height: '400px', overflowY: 'scroll', border: '1px solid #ccc', padding: '10px', marginBottom: '20px' }}>
+        {messages.map((message) => (
+          <div key={message.id} style={{ 
+            margin: '10px 0', 
+            textAlign: message.sender_id === founderId ? 'left' : 'right',
+          }}>
+            <p style={{
+              backgroundColor: message.sender_id === founderId ? '#f0f0f0' : '#e6f3ff',
+              padding: '5px 10px',
+              borderRadius: '10px',
+              display: 'inline-block',
+              maxWidth: '70%',
+            }}>
+              {message.content}
+            </p>
+            <div style={{ fontSize: '0.8em', color: '#888' }}>
+              {message.sender_id === senderFounder?.id ? 'You' : receiverFounder?.name}
+            </div>
+          </div>
+        ))}
+        <div ref={messagesEndRef} />
+      </div>
+      <form onSubmit={sendMessage} style={{ display: 'flex' }}>
+        <input
+          type="text"
+          value={newMessage}
+          onChange={(e) => setNewMessage(e.target.value)}
+          style={{ flexGrow: 1, marginRight: '10px', padding: '5px' }}
+          placeholder="Type your message..."
+        />
+        <button type="submit" style={{ padding: '5px 10px' }}>Send</button>
+      </form>
+    </div>
+  );
+};
+
+export default Chat;
+
+
+
+
+
+
+// update version chat.jsx //
+
+
+
+
+
+
+
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useParams } from 'react-router-dom';
+import { useSupabase } from '../contexts/SupabaseContext';
+
+const Chat = () => {
+  const { founderId } = useParams();
+  const [messages, setMessages] = useState([]);
+  const [newMessage, setNewMessage] = useState('');
+  const [error, setError] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [senderFounder, setSenderFounder] = useState(null);
+  const [receiverFounder, setReceiverFounder] = useState(null);
+  const supabase = useSupabase();
+  const messagesEndRef = useRef(null);
+
+  const fetchMessages = useCallback(async () => {
+    if (!senderFounder || !founderId) return;
+    setIsLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('messages')
+        .select('*')
+        .or(`and(sender_id.eq.${senderFounder.id},receiver_id.eq.${founderId}),and(sender_id.eq.${founderId},receiver_id.eq.${senderFounder.id})`)
+        .order('created_at', { ascending: true });
+
+      if (error) throw error;
+      setMessages(data);
+    } catch (error) {
+      console.error('Error fetching messages:', error);
+      setError('Failed to fetch messages: ' + error.message);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [supabase, founderId, senderFounder]);
+
+  useEffect(() => {
+    const fetchSenderFounder = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data, error } = await supabase
+          .from('founders')
+          .select('*')
+          .eq('user_id', user.id)
+          .single();
+        
+        if (error) {
+          console.error('Error fetching sender founder:', error);
+          setError('Failed to load chat');
+        } else {
+          setSenderFounder(data);
+        }
+      }
+    };
+
+    const fetchReceiverFounder = async () => {
+      if (founderId) {
+        const { data, error } = await supabase
+          .from('founders')
+          .select('*')
+          .eq('id', founderId)
+          .single();
+        
+        if (error) {
+          console.error('Error fetching receiver founder:', error);
+          setError('Failed to load receiver information');
+        } else {
+          setReceiverFounder(data);
+        }
+      }
+    };
+
+    fetchSenderFounder();
+    fetchReceiverFounder();
+  }, [supabase, founderId]);
+
+  useEffect(() => {
+    if (senderFounder) {
+      fetchMessages();
+    }
+  }, [senderFounder, fetchMessages]);
+
+  useEffect(() => {
+    const channel = supabase
+      .channel('custom-all-channel')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
+        setMessages((prevMessages) => [...prevMessages, payload.new]);
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [supabase]);
+
+  const sendMessage = async (e) => {
+    e.preventDefault();
+    if (!newMessage.trim() || !senderFounder) return;
+    setError(null);
+    try {
+      const { data, error } = await supabase.from('messages').insert([
+        {
+          sender_id: senderFounder.id,
+          receiver_id: founderId,
+          content: newMessage.trim(),
+        },
+      ]);
+
+      if (error) throw error;
+      setNewMessage('');
+    } catch (error) {
+      console.error('Error sending message:', error);
+      setError('Failed to send message: ' + error.message);
+    }
+  };
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  if (isLoading) return <div>Loading...</div>;
+  if (error) return <div>Error: {error}</div>;
+
+  return (
+    <div style={{ maxWidth: '600px', margin: '0 auto', padding: '20px' }}>
+      <h1>Chat with {receiverFounder?.name || 'User'}</h1>
+      <div style={{ height: '400px', overflowY: 'scroll', border: '1px solid #ccc', padding: '10px', marginBottom: '20px' }}>
+        {messages.map((message) => (
+          <div key={message.id} style={{ 
+            margin: '10px 0', 
+            textAlign: message.sender_id === founderId ? 'left' : 'right',
+          }}>
+            <p style={{
+              backgroundColor: message.sender_id === founderId ? '#f0f0f0' : '#e6f3ff',
+              padding: '5px 10px',
+              borderRadius: '10px',
+              display: 'inline-block',
+              maxWidth: '70%',
+            }}>
+              {message.content}
+            </p>
+            <div style={{ fontSize: '0.8em', color: '#888' }}>
+              {message.sender_id === senderFounder?.id ? 'You' : receiverFounder?.name}
+            </div>
+          </div>
+        ))}
+        <div ref={messagesEndRef} />
+      </div>
+      <form onSubmit={sendMessage} style={{ display: 'flex' }}>
+        <input
+          type="text"
+          value={newMessage}
+          onChange={(e) => setNewMessage(e.target.value)}
+          style={{ flexGrow: 1, marginRight: '10px', padding: '5px' }}
+          placeholder="Type your message..."
+        />
+        <button type="submit" style={{ padding: '5px 10px' }}>Send</button>
+      </form>
+    </div>
+  );
+};
+
+export default Chat;
