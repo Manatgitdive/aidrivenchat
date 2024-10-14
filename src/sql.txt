@@ -1,0 +1,56 @@
+-- First, enable the extensions if they're not already enabled
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS earthdistance CASCADE;
+
+-- Add latitude and longitude columns to the existing founders table if they don't exist
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'founders' AND column_name = 'latitude') THEN
+        ALTER TABLE founders ADD COLUMN latitude DOUBLE PRECISION;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'founders' AND column_name = 'longitude') THEN
+        ALTER TABLE founders ADD COLUMN longitude DOUBLE PRECISION;
+    END IF;
+END $$;
+
+-- Add an index to improve query performance for location-based searches
+-- This will only create the index if it doesn't already exist
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'idx_founders_location') THEN
+        CREATE INDEX idx_founders_location ON founders USING gist (ll_to_earth(latitude, longitude));
+    END IF;
+END $$;
+
+-- Update the updated_at column to automatically update on changes
+-- This will only create the function if it doesn't already exist
+CREATE OR REPLACE FUNCTION update_modified_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = now();
+    RETURN NEW;
+END;
+$$ language 'plpgsql';
+
+-- This will only create the trigger if it doesn't already exist
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.triggers WHERE trigger_name = 'update_founders_modtime') THEN
+        CREATE TRIGGER update_founders_modtime
+        BEFORE UPDATE ON founders
+        FOR EACH ROW
+        EXECUTE FUNCTION update_modified_column();
+    END IF;
+END $$;
+
+-- Add check constraints to ensure valid latitude and longitude values
+-- This will only add the constraints if they don't already exist
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE table_name = 'founders' AND constraint_name = 'check_valid_latitude') THEN
+        ALTER TABLE founders ADD CONSTRAINT check_valid_latitude CHECK (latitude >= -90 AND latitude <= 90);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE table_name = 'founders' AND constraint_name = 'check_valid_longitude') THEN
+        ALTER TABLE founders ADD CONSTRAINT check_valid_longitude CHECK (longitude >= -180 AND longitude <= 180);
+    END IF;
+END $$;
